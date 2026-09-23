@@ -1,6 +1,17 @@
 import { env } from 'cloudflare:workers';
 
+async function ensureSchema() {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS place_covers (
+    id TEXT PRIMARY KEY, scope TEXT NOT NULL, province TEXT NOT NULL,
+    city TEXT NOT NULL DEFAULT '', photo_key TEXT NOT NULL,
+    photo_type TEXT NOT NULL, updated_at TEXT NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_place_covers_location
+    ON place_covers(scope, province, city)`).run();
+}
+
 export async function GET() {
+  await ensureSchema();
   const { results } = await env.DB.prepare(
     'SELECT scope, province, city, photo_key AS photoKey, updated_at AS updatedAt FROM place_covers ORDER BY updated_at DESC',
   ).all();
@@ -44,6 +55,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  await ensureSchema();
 
   const previous = await env.DB.prepare(
     'SELECT photo_key AS photoKey FROM place_covers WHERE scope = ? AND province = ? AND city = ?',
